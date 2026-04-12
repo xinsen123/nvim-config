@@ -14,15 +14,19 @@ vim.opt.rtp:prepend(lazypath)
 require("lazy").setup({
   -- 主题
   { "Mofiqul/vscode.nvim", lazy = false, priority = 1000 },
-  {"folke/tokyonight.nvim",
-  lazy = false,
-  priority = 1000,
-  opts = {},},
+  { "folke/tokyonight.nvim", lazy = false, priority = 1000, opts = {} },
+  -- 候选主题 (字体花哨、高亮明显、护眼)
+  { "catppuccin/nvim", name = "catppuccin", lazy = false, priority = 1000 },
+  { "shaunsingh/nord.nvim", lazy = false, priority = 1000 },
+  { "sainnhe/everforest", lazy = false, priority = 1000 },
+  { "rose-pine/neovim", name = "rose-pine", lazy = false, priority = 1000 },
+  { "rebelot/kanagawa.nvim", lazy = false, priority = 1000 },
 
   -- 基础功能与 LSP
   "neovim/nvim-lspconfig",
   "williamboman/mason.nvim",
   "williamboman/mason-lspconfig.nvim",
+  "scalameta/nvim-metals",
 
   -- 自动补全
   "hrsh7th/nvim-cmp",
@@ -41,12 +45,20 @@ require("lazy").setup({
   },
 
   -- nvim内终端
-  {'akinsho/toggleterm.nvim', version = "*", config = true},
+  { "akinsho/toggleterm.nvim", version = "*", config = true },
 
   -- 语法高亮与彩虹括号
   { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
   "HiPhish/rainbow-delimiters.nvim",
 
   -- 简单括号补全
-  { "echasnovski/mini.pairs", version = false, event = "InsertEnter" },
+  { "echasnovski/mini.pairs", version = false, event = "InsertEnter", config = function() require("mini.pairs").setup() end },
+
+  -- ai插件
+  {
+    "olimorris/codecompanion.nvim",
+    dependencies = {
+      "ravitemer/mcphub.nvim"
+    }
+  }
 }, { ui = { border = "rounded" } })

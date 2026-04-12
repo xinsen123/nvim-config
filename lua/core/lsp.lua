@@ -7,7 +7,7 @@
 
 -- 修正 Verilog 文件类型识别
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-  pattern = { "*.v", "*.sv" },
+  pattern = { "*.v", "*.sv", "*.vh"},
   callback = function()
     vim.bo.filetype = "verilog"
   end,
@@ -16,6 +16,20 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
 
 
 vim.env.PATH = vim.fn.stdpath("data") .. "/mason/bin:" .. vim.env.PATH
+
+-- Mason 配置
+local mason_ok, mason = pcall(require, "mason")
+if mason_ok then
+  mason.setup()
+end
+
+local mason_lspconfig_ok, mason_lspconfig = pcall(require, "mason-lspconfig")
+if mason_lspconfig_ok then
+  mason_lspconfig.setup({
+    ensure_installed = { "clangd", "svlangserver" },
+    automatic_installation = true,
+  })
+end
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
@@ -62,9 +76,9 @@ local servers = {
   svlangserver = {
     filetypes = { "verilog", "systemverilog" },
     cmd = { vim.fn.stdpath("data") .. "/mason/bin/svlangserver" },
-	init_options = {
-    triggerCharacters = { ".", "#", "(", ",", "=", ":" },
-  },
+    init_options = {
+      triggerCharacters = { ".", "#", "(", ",", "=", ":" },
+    },
   },
 }
 
@@ -146,5 +160,29 @@ if ok_cmp then
       -- 如果未来装了 snippet 插件，可以启用:
       -- { name = "luasnip" },
     }),
+  })
+end
+
+-- =============================
+-- Metals (Scala) LSP configuration
+-- =============================
+local metals_ok, metals = pcall(require, "metals")
+if metals_ok then
+  local metals_config = metals.bare_config()
+  metals_config.settings = {
+    showImplicitArguments = true,
+    excludedPackages = { "akka.actor.typed.javadsl", "com.github.swagger.akka.javadsl" },
+  }
+  metals_config.init_options = {
+    statusBarProvider = "on",
+  }
+  metals_config.capabilities = capabilities
+  metals_config.on_attach = on_attach
+
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = { "scala", "sbt" },
+    callback = function(args)
+      metals.initialize_or_attach(metals_config)
+    end,
   })
 end

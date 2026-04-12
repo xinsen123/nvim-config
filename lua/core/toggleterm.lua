@@ -1,12 +1,11 @@
 vim.api.nvim_set_keymap("n", "<c-t>", "<cmd>ToggleTerm<CR>", {noremap = true, silent = true}) -- 设置ctrl + t调用终端
-vim.keymap.set('t', '<esc>', [[<C-\><C-n>]], opts)
 
 require("toggleterm").setup{
   shade_terminals = true,   -- 开启背景阴影/半透明效果
   insert_mappings = true, 
   terminal_mappings = true,
 
-  size = 24,
+  size = 20,
 
   on_open = function(term)
     -- 1. 映射 Esc 退出终端模式
