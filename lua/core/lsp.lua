@@ -1,27 +1,14 @@
--- lua/core/lsp.lua
--- =============================
--- Unified LSP setup for Neovim ≥ 0.11.x
--- Supports: C/C++, Verilog
--- Easily extensible for other languages
--- =============================
-
--- 修正 Verilog 文件类型识别
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-  pattern = { "*.v", "*.sv", "*.vh"},
+  pattern = { "*.v", "*.sv", "*.vh" },
   callback = function()
     vim.bo.filetype = "verilog"
   end,
 })
 
-
-
 vim.env.PATH = vim.fn.stdpath("data") .. "/mason/bin:" .. vim.env.PATH
 
--- Mason 配置
 local mason_ok, mason = pcall(require, "mason")
-if mason_ok then
-  mason.setup()
-end
+if mason_ok then mason.setup() end
 
 local mason_lspconfig_ok, mason_lspconfig = pcall(require, "mason-lspconfig")
 if mason_lspconfig_ok then
@@ -32,31 +19,25 @@ if mason_lspconfig_ok then
 end
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
-local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
-if ok_cmp then
+local ok_cmp_lsp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
+if ok_cmp_lsp then
   capabilities = cmp_lsp.default_capabilities(capabilities)
 end
 
--- 通用 on_attach
-local function on_attach(_, bufnr)
-  local map = function(m, lhs, rhs)
-    vim.keymap.set(m, lhs, rhs, { buffer = bufnr, silent = true })
-  end
-  map("n", "gd", vim.lsp.buf.definition)
-  map("n", "gr", vim.lsp.buf.references)
-  map("n", "gD", vim.lsp.buf.declaration)
-  map("n", "gi", vim.lsp.buf.implementation)
-  map("n", "K", vim.lsp.buf.hover)
-  map("n", "<leader>rn", vim.lsp.buf.rename)
-  map("n", "<leader>ca", vim.lsp.buf.code_action)
-  map("n", "<leader>f", function() vim.lsp.buf.format({ async = true }) end)
-  map("n", "[d", vim.diagnostic.goto_prev)
-  map("n", "]d", vim.diagnostic.goto_next)
-  map("n", "<leader>e", vim.diagnostic.open_float)
-  map("n", "<leader>q", vim.diagnostic.setloclist)
-end
+-- Neovim 0.11+ 默认 LSP 快捷键: K(悬停) grn(重命名) gra(代码操作) gri(实现) grr(引用) <C-S>(签名)
+-- 此处仅添加无默认映射的额外快捷键
+vim.api.nvim_create_autocmd("LspAttach", {
+  callback = function(args)
+    local bufnr = args.buf
+    local map = function(lhs, rhs)
+      vim.keymap.set("n", lhs, rhs, { buffer = bufnr, silent = true })
+    end
+    map("<leader>f", function() vim.lsp.buf.format({ async = true }) end)
+    map("<leader>e", vim.diagnostic.open_float)
+    map("<leader>q", vim.diagnostic.setloclist)
+  end,
+})
 
--- 自动寻找项目根目录
 local function pick_root()
   local markers = { ".git", "Makefile", "CMakeLists.txt", "compile_commands.json", "compile_flags.txt" }
   local found = vim.fs.root(0, markers)
@@ -66,13 +47,11 @@ local function pick_root()
   return vim.loop.cwd()
 end
 
--- 语言服务器列表（可拓展）
 local servers = {
   clangd = {
     filetypes = { "c", "cpp", "objc", "objcpp" },
     cmd = { vim.fn.stdpath("data") .. "/mason/bin/clangd", "--background-index", "--clang-tidy" },
   },
-
   svlangserver = {
     filetypes = { "verilog", "systemverilog" },
     cmd = { vim.fn.stdpath("data") .. "/mason/bin/svlangserver" },
@@ -82,9 +61,7 @@ local servers = {
   },
 }
 
--- 启动函数（通用）
 local function start_server(name, cfg)
-  -- Mason路径检测
   if vim.fn.executable(cfg.cmd[1]) == 0 then
     cfg.cmd[1] = name
   end
@@ -94,11 +71,9 @@ local function start_server(name, cfg)
     root_dir = pick_root(),
     filetypes = cfg.filetypes,
     capabilities = capabilities,
-    on_attach = on_attach,
   })
 end
 
--- 自动启动 LSP
 vim.api.nvim_create_autocmd("FileType", {
   pattern = vim.tbl_flatten(vim.tbl_map(function(k) return servers[k].filetypes end, vim.tbl_keys(servers))),
   callback = function(ev)
@@ -116,56 +91,34 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
--- 用户命令手动安装
 vim.api.nvim_create_user_command("LspInstall", function()
   vim.cmd("Mason")
   vim.notify("在 Mason 窗口中安装: clangd 以及 svlangserver", vim.log.levels.INFO)
 end, {})
 
--- nvim-cmp 配置（扩展 Verilog 文件类型）
 local ok_cmp, cmp = pcall(require, "cmp")
 if ok_cmp then
-  local luasnip_ok, luasnip = pcall(require, "luasnip")
-
   cmp.setup({
     snippet = {
       expand = function(args)
-        if luasnip_ok then luasnip.lsp_expand(args.body) end
+        vim.snippet.expand(args.body)
       end,
     },
     mapping = cmp.mapping.preset.insert({
-      ["<Tab>"]   = cmp.mapping.select_next_item(),
+      ["<Tab>"] = cmp.mapping.select_next_item(),
       ["<S-Tab>"] = cmp.mapping.select_prev_item(),
-      ["<CR>"]    = cmp.mapping.confirm({ select = true }),
-      ["<C-Space>"] = cmp.mapping.complete(),
-      ["<C-e>"]   = cmp.mapping.close(),
+      ["<CR>"] = cmp.mapping.confirm({ select = true }),
     }),
     sources = cmp.config.sources({
       { name = "nvim_lsp" },
-      { name = "buffer" },
-      { name = "path" },
     }),
     window = {
-      completion    = cmp.config.window.bordered(),
+      completion = cmp.config.window.bordered(),
       documentation = cmp.config.window.bordered(),
     },
   })
-
-  -- 针对 Verilog 文件单独设定额外源（可选）
-  cmp.setup.filetype("verilog", {
-    sources = cmp.config.sources({
-      { name = "nvim_lsp" },
-      { name = "buffer" },
-      { name = "path" },
-      -- 如果未来装了 snippet 插件，可以启用:
-      -- { name = "luasnip" },
-    }),
-  })
 end
 
--- =============================
--- Metals (Scala) LSP configuration
--- =============================
 local metals_ok, metals = pcall(require, "metals")
 if metals_ok then
   local metals_config = metals.bare_config()
@@ -177,11 +130,10 @@ if metals_ok then
     statusBarProvider = "on",
   }
   metals_config.capabilities = capabilities
-  metals_config.on_attach = on_attach
 
   vim.api.nvim_create_autocmd("FileType", {
     pattern = { "scala", "sbt" },
-    callback = function(args)
+    callback = function()
       metals.initialize_or_attach(metals_config)
     end,
   })
