@@ -1,3 +1,4 @@
+-- 把 Verilog / SystemVerilog 文件识别成对应 filetype
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   pattern = { "*.v", "*.sv", "*.vh" },
   callback = function()
@@ -5,6 +6,7 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
+-- 优先使用 Mason 安装的 LSP 可执行文件
 vim.env.PATH = vim.fn.stdpath("data") .. "/mason/bin:" .. vim.env.PATH
 
 local mason_ok, mason = pcall(require, "mason")
@@ -13,11 +15,13 @@ if mason_ok then mason.setup() end
 local mason_lspconfig_ok, mason_lspconfig = pcall(require, "mason-lspconfig")
 if mason_lspconfig_ok then
   mason_lspconfig.setup({
-    ensure_installed = { "clangd", "svlangserver" },
+    -- 需要时自动安装这些语言服务器
+    ensure_installed = { "clangd", "svlangserver", "jdtls" },
     automatic_installation = true,
   })
 end
 
+-- 让补全插件把额外能力注册给 LSP
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 local ok_cmp_lsp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
 if ok_cmp_lsp then
@@ -38,8 +42,9 @@ vim.api.nvim_create_autocmd("LspAttach", {
   end,
 })
 
-local function pick_root()
-  local markers = { ".git", "Makefile", "CMakeLists.txt", "compile_commands.json", "compile_flags.txt" }
+local function pick_root(markers)
+  -- 尽量从常见工程标记推断项目根目录
+  markers = markers or { ".git", "Makefile", "CMakeLists.txt", "compile_commands.json", "compile_flags.txt" }
   local found = vim.fs.root(0, markers)
   if found then return found end
   local bufname = vim.api.nvim_buf_get_name(0)
@@ -48,10 +53,12 @@ local function pick_root()
 end
 
 local servers = {
+  -- C/C++ 使用 clangd
   clangd = {
     filetypes = { "c", "cpp", "objc", "objcpp" },
     cmd = { vim.fn.stdpath("data") .. "/mason/bin/clangd", "--background-index", "--clang-tidy" },
   },
+  -- Verilog / SystemVerilog 使用 svlangserver
   svlangserver = {
     filetypes = { "verilog", "systemverilog" },
     cmd = { vim.fn.stdpath("data") .. "/mason/bin/svlangserver" },
@@ -59,21 +66,29 @@ local servers = {
       triggerCharacters = { ".", "#", "(", ",", "=", ":" },
     },
   },
+  -- Java 使用 jdtls，适合 Gradle / Maven 项目
+  jdtls = {
+    filetypes = { "java" },
+    cmd = { vim.fn.stdpath("data") .. "/mason/bin/jdtls" },
+    root_markers = { "gradlew", "mvnw", "settings.gradle", "settings.gradle.kts", "pom.xml", ".git" },
+  },
 }
 
 local function start_server(name, cfg)
+  -- Mason 没装时回退到系统 PATH 中的同名命令
   if vim.fn.executable(cfg.cmd[1]) == 0 then
     cfg.cmd[1] = name
   end
   vim.lsp.start({
     name = name,
     cmd = cfg.cmd,
-    root_dir = pick_root(),
+    root_dir = pick_root(cfg.root_markers),
     filetypes = cfg.filetypes,
     capabilities = capabilities,
   })
 end
 
+-- 进入对应 filetype 时按需启动语言服务器，避免重复启动
 vim.api.nvim_create_autocmd("FileType", {
   pattern = vim.tbl_flatten(vim.tbl_map(function(k) return servers[k].filetypes end, vim.tbl_keys(servers))),
   callback = function(ev)
@@ -91,14 +106,16 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+-- 提供一个命令，方便手动打开 Mason 安装界面
 vim.api.nvim_create_user_command("LspInstall", function()
   vim.cmd("Mason")
-  vim.notify("在 Mason 窗口中安装: clangd 以及 svlangserver", vim.log.levels.INFO)
+  vim.notify("在 Mason 窗口中安装: clangd、svlangserver 和 jdtls", vim.log.levels.INFO)
 end, {})
 
 local ok_cmp, cmp = pcall(require, "cmp")
 if ok_cmp then
   cmp.setup({
+    -- 使用 Neovim 内置 snippet 能力展开补全项
     snippet = {
       expand = function(args)
         vim.snippet.expand(args.body)
@@ -121,6 +138,7 @@ end
 
 local metals_ok, metals = pcall(require, "metals")
 if metals_ok then
+  -- Scala 项目进入相关文件时自动挂载 metals
   local metals_config = metals.bare_config()
   metals_config.settings = {
     showImplicitArguments = true,
