@@ -28,17 +28,50 @@ if ok_cmp_lsp then
   capabilities = cmp_lsp.default_capabilities(capabilities)
 end
 
+local indent_size = 4
+
+local function apply_four_space_indent(bufnr)
+  vim.bo[bufnr].expandtab = true
+  vim.bo[bufnr].shiftwidth = indent_size
+  vim.bo[bufnr].tabstop = indent_size
+  vim.bo[bufnr].softtabstop = indent_size
+end
+
+local function format_buffer(bufnr, async)
+  vim.lsp.buf.format({
+    bufnr = bufnr,
+    async = async,
+    formatting_options = {
+      tabSize = indent_size,
+      insertSpaces = true,
+    },
+  })
+end
+
+vim.api.nvim_create_user_command("Format", function()
+  format_buffer(vim.api.nvim_get_current_buf(), true)
+end, { desc = "Format current buffer" })
+
 -- Neovim 0.11+ 默认 LSP 快捷键: K(悬停) grn(重命名) gra(代码操作) gri(实现) grr(引用) <C-S>(签名)
 -- 此处仅添加无默认映射的额外快捷键
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
     local bufnr = args.buf
+    apply_four_space_indent(bufnr)
+
     local map = function(lhs, rhs)
       vim.keymap.set("n", lhs, rhs, { buffer = bufnr, silent = true })
     end
-    map("<leader>f", function() vim.lsp.buf.format({ async = true }) end)
+    map("<leader>f", function() format_buffer(bufnr, true) end)
     map("<leader>e", vim.diagnostic.open_float)
     map("<leader>q", vim.diagnostic.setloclist)
+  end,
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "*",
+  callback = function(ev)
+    apply_four_space_indent(ev.buf)
   end,
 })
 
@@ -122,9 +155,25 @@ if ok_cmp then
       end,
     },
     mapping = cmp.mapping.preset.insert({
-      ["<Tab>"] = cmp.mapping.select_next_item(),
-      ["<S-Tab>"] = cmp.mapping.select_prev_item(),
-      ["<CR>"] = cmp.mapping.confirm({ select = true }),
+      ["<Down>"] = cmp.mapping.select_next_item(),
+      ["<Up>"] = cmp.mapping.select_prev_item(),
+      ["<Tab>"] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          cmp.confirm({ select = true })
+          return
+        end
+
+        fallback()
+      end, { "i", "s" }),
+      ["<CR>"] = cmp.mapping(function(fallback)
+        local ok_pairs, mini_pairs = pcall(require, "mini.pairs")
+        if ok_pairs then
+          vim.api.nvim_feedkeys(mini_pairs.cr(), "in", false)
+          return
+        end
+
+        fallback()
+      end, { "i", "s" }),
     }),
     sources = cmp.config.sources({
       { name = "nvim_lsp" },
@@ -143,6 +192,8 @@ if metals_ok then
   metals_config.settings = {
     showImplicitArguments = true,
     excludedPackages = { "akka.actor.typed.javadsl", "com.github.swagger.akka.javadsl" },
+    -- Chisel/Scala 2.13 为主，统一交给全局 scalafmt 配置使用 4 空格缩进
+    scalafmtConfigPath = vim.fn.stdpath("config") .. "/.scalafmt.conf",
   }
   metals_config.init_options = {
     statusBarProvider = "on",

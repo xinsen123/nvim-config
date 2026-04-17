@@ -2,9 +2,10 @@
 vim.o.termguicolors = true
 vim.opt.number = true
 vim.opt.relativenumber = true
-vim.o.expandtab = false
+vim.o.expandtab = true
 vim.o.shiftwidth = 4
 vim.o.tabstop = 4
+vim.o.softtabstop = 4
 vim.o.smartindent = true
 vim.o.mouse = "a"
 vim.o.clipboard = "unnamedplus"
