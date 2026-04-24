@@ -207,3 +207,68 @@ if metals_ok then
     end,
   })
 end
+
+
+-- hex配置
+return {
+  "RaafatTurki/hex.nvim", -- 插件仓库地址
+  event = "VeryLazy",      -- 延迟加载，在 Neovim 启动后加载
+  dependencies = {
+    "nvim-lua/plenary.nvim", -- hex.nvim 依赖，确保已安装
+  },
+  config = function()
+    -- 主配置函数
+    require("hex").setup({
+      -- 1. 核心命令配置
+      dump_cmd = "xxd -g 1 -u",    -- 将二进制转为十六进制的命令
+      -- -g 1: 每个字节之间显示一个空格
+      -- -u: 使用大写十六进制字母
+      assemble_cmd = "xxd -r",     -- 将十六进制转回二进制的命令
+
+      -- 2. 二进制文件自动检测逻辑
+      -- 在文件读取前判断（可根据文件名）
+      is_buf_binary_pre_read = function()
+        local filename = vim.fn.expand("%:t") -- 获取当前文件名（不含路径）
+        -- 定义需要自动使用 Hex 模式的文件扩展名
+        local binary_extensions = {
+          "bin", "exe", "dll", "so", "o", "a", "lib", "dat", "img", "iso"
+        }
+        -- 检查文件名是否以这些扩展名结尾（不区分大小写）
+        for _, ext in ipairs(binary_extensions) do
+          if filename:lower():match("%.?" .. ext .. "$") then
+            return true
+          end
+        end
+        return false -- 默认不是二进制文件
+      end,
+
+      -- 在文件读取后判断（可根据文件内容，例如查找 NULL 字节）
+      is_buf_binary_post_read = function()
+        -- 这个函数在文件内容加载后执行
+        -- 可以搜索 NULL 字节（0x00）来判断是否为二进制
+        -- 但请注意：某些文本文件也可能包含 NULL 字节
+        local null_byte_found = vim.fn.search("\\%x00", "nw") > 0
+        return null_byte_found
+      end,
+
+      -- 3. 其他可选配置（保持默认即可，通常无需修改）
+      -- 你可以在这里添加其他 hex.nvim 提供的配置项
+      -- 例如：
+      -- highlight_bytes = true, -- 高亮字节
+    })
+
+    -- 4. 设置快捷键映射（可选，但强烈推荐）
+    -- 使用 vim.keymap.set 进行键位映射
+    local map = vim.keymap.set
+    local opts = { silent = true, noremap = true, desc = "Hex: Toggle View" }
+
+    -- 在普通模式下，按 <leader>H 切换十六进制/文本视图
+    -- 假设你的 leader 键是空格（在 core/options.lua 中设置）
+    map("n", "<leader>H", "<cmd>HexToggle<CR>", opts)
+
+    -- 你还可以为 HexDump 和 HexAssemble 设置单独的快捷键
+    -- map("n", "<leader>hd", "<cmd>HexDump<CR>", { desc = "Hex: Dump to Hex" })
+    -- map("n", "<leader>ha", "<cmd>HexAssemble<CR>", { desc = "Hex: Assemble to Binary" })
+
+  end,
+}

@@ -16,6 +16,7 @@ require("lazy").setup({
   "williamboman/mason.nvim",
   "williamboman/mason-lspconfig.nvim",
   "scalameta/nvim-metals",
+  "RaafatTurki/hex.nvim",
 
   -- 自动补全
   "hrsh7th/nvim-cmp",
