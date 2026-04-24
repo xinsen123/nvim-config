@@ -63,10 +63,67 @@ require("neo-tree").setup({
   },
 })
 
+----------------------------------------------------------------------
+-- 持久化 neo-tree 展开目录状态（退出保存，启动恢复）
+----------------------------------------------------------------------
+local state_file = vim.fn.stdpath("data") .. "/neo-tree-expanded.json"
+
+local function save_neotree_state()
+  local ok, renderer = pcall(require, "neo-tree.ui.renderer")
+  local ok2, manager = pcall(require, "neo-tree.sources.manager")
+  if not (ok and ok2) then return end
+  local state = manager.get_state("filesystem")
+  if state and state.tree then
+    local expanded = renderer.get_expanded_nodes(state.tree)
+    if expanded and #expanded > 0 then
+      local f = io.open(state_file, "w")
+      if f then f:write(vim.fn.json_encode(expanded)); f:close() end
+    end
+  end
+end
+
+local function load_neotree_state()
+  local ok, data = pcall(function()
+    local f = io.open(state_file, "r")
+    if not f then return nil end
+    local content = f:read("*a"); f:close()
+    return vim.fn.json_decode(content)
+  end)
+  if ok and type(data) == "table" and #data > 0 then
+    return data
+  end
+  return {}
+end
+
+-- 关闭 neo-tree 窗口时保存（按 q 关闭触发）
+local function setup_save_on_close()
+  local ok, events = pcall(require, "neo-tree.events")
+  if ok then
+    events.subscribe({
+      event = events.NEO_TREE_WINDOW_BEFORE_CLOSE,
+      handler = save_neotree_state,
+    })
+  end
+end
+
+-- :q / :wq / :wqa 退出时保存（QuitPre 比 VimLeavePre 早触发，树状态还在）
+vim.api.nvim_create_autocmd("QuitPre", {
+  callback = save_neotree_state,
+})
+
+-- 启动时恢复展开目录
 vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
-    -- 空目录启动时自动打开文件树
+    setup_save_on_close()
     if #vim.fn.argv() == 0 then
+      local expanded = load_neotree_state()
+      if #expanded > 0 then
+        local manager = require("neo-tree.sources.manager")
+        local state = manager.get_state("filesystem")
+        -- 用 force_open_folders，因为 fs_scan.get_items() 内部会执行：
+        --   state.default_expanded_nodes = state.force_open_folders or { state.path }
+        state.force_open_folders = expanded
+      end
       require("neo-tree.command").execute({ toggle = true, dir = vim.fn.getcwd() })
     end
   end,
